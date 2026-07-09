@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>Paste local clipboard images into your remote coding agent over SSH.</b><br>
-  Screenshot on your laptop, press <kbd>Ctrl</kbd>+<kbd>V</kbd> in a remote session — works with
+  Screenshot on your laptop, press <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>V</kbd> in a remote session — works with
   <b>Claude Code</b>, <b>Codex</b>, or any terminal app that reads <code>xclip</code>.
 </p>
 
@@ -37,7 +37,7 @@ for the menus when available, and falls back to a clean built-in menu otherwise.
 
 1. Copy or screenshot an image.
 2. **Daemon mode:** nothing to do. **Hotkey mode:** press your bound key.
-3. In Claude Code on the remote, press <kbd>Ctrl</kbd>+<kbd>V</kbd>.
+3. In Claude Code on the remote, press <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>V</kbd>.
 
 Bind the hotkey to `~/.cssh/bin/cssh-push` with Raycast, Hammerspoon, macOS
 Shortcuts, or Karabiner.

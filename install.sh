@@ -314,7 +314,7 @@ if ! extract_clipboard_png "$tmp_png"; then
     notify "no image in clipboard"; exit 1
 fi
 push_png_to_remote "$tmp_png"
-notify "image synced — Ctrl+V in Claude Code"
+notify "image synced — Ctrl/⌘+V in your agent"
 CSSH_PUSH_EOF
 }
 
@@ -770,7 +770,7 @@ main() {
     step "How do you want to trigger pushes?"
     local mode
     mode="$(ui_choose_one "Trigger mode" \
-        "Auto-sync daemon (just screenshot, then Ctrl+V)" \
+        "Auto-sync daemon (just screenshot, then Ctrl/⌘+V)" \
         "Hotkey / on-demand (run cssh-push)" \
         "Both")"
     case "$mode" in
@@ -799,7 +799,7 @@ main() {
 
     printf '\n%s%s All set.%s\n' "$green" "$bold" "$reset"
     info "Hotkey: bind a key to  ${bold}$HOME/.cssh/bin/cssh-push${reset}  (Raycast / Hammerspoon / Shortcuts)"
-    info "Then: screenshot → Ctrl+V inside Claude Code on ${bold}$primary${reset}"
+    info "Then: screenshot → Ctrl/⌘+V inside your agent on ${bold}$primary${reset}"
     warn "Relaunch Claude Code on the remote so it inherits the shimmed PATH."
     [ "$codex_on" = "1" ] && warn "Relaunch Codex too — it needs DISPLAY=127.0.0.1:99 from the new shell."
     info "Enable Codex later on any host:  ${dim}curl -fsSL <install.sh> | bash -s -- --codex <host>${reset}"

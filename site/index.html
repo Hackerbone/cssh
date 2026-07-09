@@ -4,11 +4,11 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>cssh — paste local screenshots into your remote coding agent over SSH</title>
-<meta name="description" content="Screenshot on your laptop, press Ctrl+V in a remote Claude Code, Codex, or any xclip-based terminal session. cssh bridges your local clipboard to any Linux box over SSH — one setup script, a few KB, no runtime deps beyond bash + ssh." />
+<meta name="description" content="Screenshot on your laptop, press Ctrl/⌘+V in a remote Claude Code, Codex, or any xclip-based terminal session. cssh bridges your local clipboard to any Linux box over SSH — one setup script, a few KB, no runtime deps beyond bash + ssh." />
 <meta name="theme-color" content="#17151f" />
 <meta property="og:type" content="website" />
 <meta property="og:title" content="cssh — paste local screenshots into your remote coding agent over SSH" />
-<meta property="og:description" content="Works with Claude Code, Codex, and any terminal app that reads xclip. Screenshot, then Ctrl+V in your SSH session. One setup script, a few KB, zero runtime deps." />
+<meta property="og:description" content="Works with Claude Code, Codex, and any terminal app that reads xclip. Screenshot, then Ctrl/⌘+V in your SSH session. One setup script, a few KB, zero runtime deps." />
 <meta property="og:url" content="https://cssh.ssitaraman.com" />
 <meta name="twitter:card" content="summary_large_image" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%2317151f'/%3E%3Cpath%20d='M8%2011l4.5%204.5L8%2020'%20fill='none'%20stroke='%23a6e3a1'%20stroke-width='2.4'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3Crect%20x='16'%20y='18.5'%20width='9'%20height='3'%20rx='1.2'%20fill='%23ff87d7'/%3E%3C/svg%3E" />
@@ -281,7 +281,7 @@
     <div>
       <span class="eyebrow">Clipboard → SSH, for terminal AI agents</span>
       <h1>Paste local screenshots into your <span class="accent">remote coding&nbsp;agent</span>.</h1>
-      <p class="lede">Your agent runs over SSH and only ever sees the <b>remote box's</b> clipboard — so the screenshot on your laptop never shows up. cssh bridges the two: screenshot, then press <kbd>Ctrl</kbd>+<kbd>V</kbd> in your session.</p>
+      <p class="lede">Your agent runs over SSH and only ever sees the <b>remote box's</b> clipboard — so the screenshot on your laptop never shows up. cssh bridges the two: screenshot, then press <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>V</kbd> in your session.</p>
 
       <div class="cmd" role="group" aria-label="Install command">
         <div class="cmd-text" id="cmd"><span class="p">$ </span>curl -fsSL https://raw.githubusercontent.com/Hackerbone/cssh/main/install.sh | bash</div>
@@ -306,7 +306,7 @@
     <div class="demo-head">
       <span class="eyebrow">Watch it work</span>
       <h2>Laptop to remote, in one paste.</h2>
-      <p>Screenshot on the Mac, <kbd>Ctrl</kbd>+<kbd>V</kbd> in the SSH session — no detours.</p>
+      <p>Screenshot on the Mac, <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>V</kbd> in the SSH session — no detours.</p>
     </div>
     <div class="player">
       <div class="player-bar">
@@ -371,7 +371,7 @@
       </div>
       <div class="step">
         <div class="no">03 — Paste</div>
-        <h3>Press Ctrl+V in your agent</h3>
+        <h3>Press Ctrl/⌘+V in your agent</h3>
         <p>A shimmed <code>xclip</code>, ahead of the real one on <code>PATH</code>, serves your image once — then gets out of the way.</p>
       </div>
     </div>
@@ -464,7 +464,7 @@
         <div class="cmd-text" id="cmd2"><span class="p">$ </span>curl -fsSL https://raw.githubusercontent.com/Hackerbone/cssh/main/install.sh | bash</div>
         <button class="cmd-copy" id="copy2" aria-label="Copy install command">copy</button>
       </div>
-      <p class="then">then <b>screenshot → Ctrl+V</b> inside your agent on the remote</p>
+      <p class="then">then <b>screenshot → Ctrl/⌘+V</b> inside your agent on the remote</p>
       <p class="undo">Changed your mind? Uninstall is one line too — it reverses both ends and backs up your SSH config.</p>
     </div>
   </div>
@@ -518,7 +518,7 @@
     ['  <span class="ok">✓</span> daemon auto-starts at login', 160],
     ['', 70],
     ['  <span class="ok">✓ All set.</span>', 180],
-    ['  <span class="mut">screenshot → </span><span class="sel">Ctrl+V</span><span class="mut"> in your agent on dev-box</span>', 0],
+    ['  <span class="mut">screenshot → </span><span class="sel">Ctrl/⌘+V</span><span class="mut"> in your agent on dev-box</span>', 0],
   ];
   const body = document.getElementById("tbody");
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
