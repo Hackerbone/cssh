@@ -543,6 +543,14 @@ if have Xvfb && have xclip; then
     nohup "$HOME/.cssh/bin/cssh-x11d" >"$HOME/.cssh/x11d.log" 2>&1 </dev/null &
     exit 0
 fi
+# Deps missing and no passwordless sudo — tell the user exactly what to run.
+echo "cssh: Xvfb/xclip not installed on this host." >&2
+if   have apt-get; then echo "cssh: install with:  sudo apt-get install -y$need" >&2
+elif have dnf;     then echo "cssh: install with:  sudo dnf install -y$need" >&2
+elif have pacman;  then echo "cssh: install with:  sudo pacman -S --noconfirm$need" >&2
+elif have zypper;  then echo "cssh: install with:  sudo zypper install -y$need" >&2
+else echo "cssh: install these packages, then re-run:$need" >&2
+fi
 exit 3
 CSSH_CODEX_EOF
 }
@@ -562,7 +570,7 @@ install_codex_remote() {
             info "relaunch Codex on $host so it inherits DISPLAY=127.0.0.1:99"
             ;;
         3)
-            warn "Xvfb/xclip missing on $host — install them, then run: ~/.cssh/bin/cssh-x11d &"
+            warn "Codex deps missing on $host — run the install command shown above, then: --codex $host"
             ;;
         *)
             warn "Codex setup failed on $host (ssh exit $code)"
