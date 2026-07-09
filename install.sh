@@ -379,27 +379,44 @@ cat <<'CSSH_X11D_EOF'
 #!/usr/bin/env bash
 set -u
 home="${HOME:-/home/$(id -un)}"
-# TCP-loopback DISPLAY — Codex's sandbox blocks the /tmp/.X11-unix socket.
-disp="${CSSH_DISPLAY:-127.0.0.1:99}"
-xnum=":${disp##*:}"; xnum="${xnum%%.*}"     # "127.0.0.1:99" -> ":99"
 img="$home/.cssh/latest.png"
+disp_file="$home/.cssh/display"
 ttl=300; [ -f "$home/.cssh/ttl" ] && ttl="$(cat "$home/.cssh/ttl" 2>/dev/null || echo 300)"
 
 log() { printf '%s cssh-x11d: %s\n' "$(date '+%H:%M:%S')" "$*"; }
+port_busy() { (ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null) | grep -q ":$1 "; }
 
-ensure_xvfb() {
-    pgrep -f "Xvfb $xnum " >/dev/null 2>&1 && return 0
-    log "starting Xvfb on $xnum (tcp)"
-    rm -f "/tmp/.X${xnum#:}-lock" 2>/dev/null || true
-    Xvfb "$xnum" -screen 0 16x16x24 -listen tcp >/dev/null 2>&1 &
-    sleep 1
+# Claim our OWN free display — never reuse a foreign X server (e.g. VNC's :99),
+# which may not listen on TCP. TCP-loopback DISPLAY is required because Codex's
+# sandbox blocks the /tmp/.X11-unix socket.
+pick_display() {
+    local n
+    for n in $(seq 99 140); do
+        [ -e "/tmp/.X${n}-lock" ] && continue
+        port_busy "$((6000 + n))" && continue
+        echo "$n"; return 0
+    done
+    return 1
 }
 
-command -v Xvfb >/dev/null 2>&1 || { log "Xvfb not installed — cannot serve the X clipboard"; exit 1; }
+XNUM=""; DISP=""
+start_xserver() {
+    # Keep our own Xvfb if it is still up.
+    [ -n "$XNUM" ] && pgrep -f "Xvfb :$XNUM " >/dev/null 2>&1 && return 0
+    local n; n="$(pick_display)" || { log "no free X display in :99..:140"; return 1; }
+    XNUM="$n"; DISP="127.0.0.1:$n"
+    log "starting Xvfb on :$n (tcp $((6000 + n)))"
+    Xvfb ":$n" -screen 0 16x16x24 -listen tcp >/dev/null 2>&1 &
+    local i; for i in $(seq 1 15); do port_busy "$((6000 + n))" && break; sleep 0.3; done
+    printf '127.0.0.1:%s\n' "$n" > "$disp_file"   # shells source this for DISPLAY
+    log "DISPLAY=$DISP  (recorded in ~/.cssh/display)"
+}
+
+command -v Xvfb  >/dev/null 2>&1 || { log "Xvfb not installed — cannot serve the X clipboard"; exit 1; }
 command -v xclip >/dev/null 2>&1 || { log "xclip not installed — cannot own the X selection"; exit 1; }
 
-ensure_xvfb
-log "watching $img -> CLIPBOARD on $disp"
+start_xserver || exit 1
+log "watching $img -> CLIPBOARD on $DISP"
 last=""
 while true; do
     if [ -s "$img" ]; then
@@ -408,12 +425,13 @@ while true; do
         if [ "$age" -le "$ttl" ] && [ "$mtime" != "$last" ]; then
             # xclip -i takes ownership and forks to serve the selection; a later
             # call replaces it, so re-loading on each new image just works.
-            if DISPLAY="$disp" xclip -selection clipboard -t image/png -i < "$img" 2>/dev/null; then
+            if DISPLAY="$DISP" xclip -selection clipboard -t image/png -i < "$img" 2>/dev/null; then
                 last="$mtime"; log "loaded image into clipboard (age ${age}s)"
             fi
         fi
     fi
-    ensure_xvfb        # respawn Xvfb if it died
+    # Respawn (possibly on a new display) if our Xvfb died.
+    if [ -n "$XNUM" ] && ! pgrep -f "Xvfb :$XNUM " >/dev/null 2>&1; then XNUM=""; start_xserver || true; fi
     sleep 1
 done
 CSSH_X11D_EOF
@@ -534,8 +552,8 @@ case "${SHELL:-}" in
   *bash) rc="$HOME/.bashrc" ;;
   *)     rc="$HOME/.profile" ;;
 esac
-line='export DISPLAY=127.0.0.1:99'
-grep -qF "$line" "$rc" 2>/dev/null || printf '\n# cssh: point Codex (arboard/X11) at the headless X clipboard\n%s\n' "$line" >> "$rc"
+line='[ -r "$HOME/.cssh/display" ] && export DISPLAY="$(cat "$HOME/.cssh/display")"'
+grep -qF '.cssh/display' "$rc" 2>/dev/null || printf '\n# cssh: point Codex (arboard/X11) at the headless X clipboard\n%s\n' "$line" >> "$rc"
 
 # (Re)start the supervisor. Detach fully so ssh doesn't hang on the channel.
 pkill -f "cssh/bin/cssh-x11d" >/dev/null 2>&1 || true
@@ -595,9 +613,10 @@ uninstall_remote() {
     info "cleaning $host ..."
     if ssh -o BatchMode=yes -o ConnectTimeout=8 "$host" 'bash -s' <<'REMOTE_UNINSTALL'
 set -e
-# Stop the Codex X11 bridge, if it was ever enabled.
+# Stop the Codex X11 bridge, if it was ever enabled (kill the Xvfb we own).
 pkill -f "cssh/bin/cssh-x11d" >/dev/null 2>&1 || true
-pkill -f "Xvfb :99 " >/dev/null 2>&1 || true
+d="$(cat "$HOME/.cssh/display" 2>/dev/null || true)"; n="${d##*:}"
+[ -n "$n" ] && pkill -f "Xvfb :$n " >/dev/null 2>&1 || true
 # Drop every "# cssh:" block (PATH shim + DISPLAY) from the shell rc files.
 for rc in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.profile"; do
     [ -f "$rc" ] || continue
