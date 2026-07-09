@@ -482,7 +482,7 @@ main() {
     while IFS= read -r line; do [ -n "$line" ] && hosts+=("$line"); done < <(list_ssh_hosts)
     if [ "${#hosts[@]}" -gt 0 ]; then
         while IFS= read -r line; do [ -n "$line" ] && chosen+=("$line"); done \
-            < <(ui_choose_multi "Hosts from ~/.ssh/config (pick one or more)" "${hosts[@]}" "➕ Add a custom host")
+            < <(ui_choose_multi "Hosts from ~/.ssh/config — press x/space to select, then enter" "${hosts[@]}" "➕ Add a custom host")
     else
         info "no hosts found in ~/.ssh/config"
         chosen=("➕ Add a custom host")
@@ -490,7 +490,7 @@ main() {
 
     # bash 3.2 (macOS default) treats "${empty[@]}" as unbound under `set -u`,
     # so guard before iterating. An empty selection means the user picked nothing.
-    [ "${#chosen[@]}" -gt 0 ] || die "no host selected"
+    [ "${#chosen[@]}" -gt 0 ] || die "no host selected — press x or space to toggle a host, then enter to confirm"
 
     local enabled=()
     local h
@@ -503,7 +503,7 @@ main() {
             enabled+=("$h")
         fi
     done
-    [ "${#enabled[@]}" -gt 0 ] || die "no host selected"
+    [ "${#enabled[@]}" -gt 0 ] || die "no host selected — press x or space to toggle a host, then enter to confirm"
 
     step "Installing local components"
     install_local_bin
