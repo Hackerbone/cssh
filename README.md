@@ -44,8 +44,8 @@ Shortcuts, or Karabiner.
 
 ## How it works
 
-Claude Code — and other terminal agents like Codex — read pasted images on Linux
-by shelling out to `xclip` (verified against the Claude Code binary):
+Claude Code reads pasted images on Linux by shelling out to `xclip` (verified
+against the Claude Code binary):
 
 ```
 xclip -selection clipboard -t TARGETS   -o    # is an image available?
@@ -66,6 +66,30 @@ Two ways to trigger the push, chosen at install — use either or both:
 - **Daemon** — auto-syncs every new clipboard image. Just screenshot, then paste.
 - **Hotkey** — runs `cssh-push` on demand.
 
+## Codex support
+
+Codex is different: it reads the clipboard through `arboard`, which talks **X11
+directly** — it never runs the `xclip` binary, so the shim can't reach it. On a
+headless box arboard just times out (`X11 server connection … unreachable`).
+
+To bridge Codex, cssh can run a tiny **headless X server** (Xvfb) on the remote
+and keep its clipboard loaded with the image you synced, so Codex has a real X
+clipboard to paste from:
+
+```bash
+# during install, answer "yes" to "Also use Codex?"  — or enable it later:
+curl -fsSL https://raw.githubusercontent.com/Hackerbone/cssh/main/install.sh | bash -s -- --codex <host>
+```
+
+This installs `Xvfb` + `xclip` on the remote (needs a package manager and
+passwordless `sudo`, or install them yourself), starts a supervisor that owns
+the X clipboard, and adds `export DISPLAY=127.0.0.1:99` to your remote shell rc.
+The DISPLAY uses the **TCP loopback** form on purpose — Codex's sandbox blocks
+the `/tmp/.X11-unix` socket. Relaunch Codex afterward so it picks up `DISPLAY`.
+
+> Trade-off: this is the one path that puts an X server on the remote. Claude
+> Code stays completely X-free; Codex support is opt-in.
+
 ## Configuration
 
 | Setting | Location | Default |
@@ -79,6 +103,8 @@ Two ways to trigger the push, chosen at install — use either or both:
 
 - **Laptop** — macOS, Linux (X11/Wayland), or Windows via WSL/Git-Bash; `bash` + `ssh`.
 - **Remote** — any Linux box you SSH into; the shim needs only `bash`, `stat`, `date`.
+- **Remote, for Codex** — additionally `Xvfb` + `xclip` (auto-installed with
+  passwordless `sudo`, or install them yourself).
 
 ## Uninstall
 

@@ -74,7 +74,9 @@ maybe_install_gum() {
 ui_confirm() {
     local q="$1"
     if [ "${HAS_GUM:-0}" = "1" ]; then
-        gum confirm "$q"
+        # Default to "No" so an accidental Enter never triggers a destructive or
+        # heavyweight action (matches the [y/N] fallback below).
+        gum confirm --default=false "$q"
         return $?
     fi
     printf '  %s [y/N] ' "$q"
@@ -366,6 +368,57 @@ cat <<'CSSH_PLIST_EOF'
 CSSH_PLIST_EOF
 }
 
+# The Codex bridge. Codex (and anything using the `arboard` crate) reads the
+# clipboard by talking X11 *directly* — it never shells out to xclip, so the
+# shim can't reach it. This supervisor gives the remote a tiny headless X
+# server (Xvfb) and keeps its CLIPBOARD selection loaded with the image synced
+# from your laptop, so Codex's paste finds a real X clipboard to read.
+# Claude Code stays X-free; this runs only when you opt into Codex support.
+emit_x11d() {
+cat <<'CSSH_X11D_EOF'
+#!/usr/bin/env bash
+set -u
+home="${HOME:-/home/$(id -un)}"
+# TCP-loopback DISPLAY — Codex's sandbox blocks the /tmp/.X11-unix socket.
+disp="${CSSH_DISPLAY:-127.0.0.1:99}"
+xnum=":${disp##*:}"; xnum="${xnum%%.*}"     # "127.0.0.1:99" -> ":99"
+img="$home/.cssh/latest.png"
+ttl=300; [ -f "$home/.cssh/ttl" ] && ttl="$(cat "$home/.cssh/ttl" 2>/dev/null || echo 300)"
+
+log() { printf '%s cssh-x11d: %s\n' "$(date '+%H:%M:%S')" "$*"; }
+
+ensure_xvfb() {
+    pgrep -f "Xvfb $xnum " >/dev/null 2>&1 && return 0
+    log "starting Xvfb on $xnum (tcp)"
+    rm -f "/tmp/.X${xnum#:}-lock" 2>/dev/null || true
+    Xvfb "$xnum" -screen 0 16x16x24 -listen tcp >/dev/null 2>&1 &
+    sleep 1
+}
+
+command -v Xvfb >/dev/null 2>&1 || { log "Xvfb not installed — cannot serve the X clipboard"; exit 1; }
+command -v xclip >/dev/null 2>&1 || { log "xclip not installed — cannot own the X selection"; exit 1; }
+
+ensure_xvfb
+log "watching $img -> CLIPBOARD on $disp"
+last=""
+while true; do
+    if [ -s "$img" ]; then
+        now="$(date +%s)"; mtime="$(stat -c %Y "$img" 2>/dev/null || echo 0)"
+        age=$((now - mtime))
+        if [ "$age" -le "$ttl" ] && [ "$mtime" != "$last" ]; then
+            # xclip -i takes ownership and forks to serve the selection; a later
+            # call replaces it, so re-loading on each new image just works.
+            if DISPLAY="$disp" xclip -selection clipboard -t image/png -i < "$img" 2>/dev/null; then
+                last="$mtime"; log "loaded image into clipboard (age ${age}s)"
+            fi
+        fi
+    fi
+    ensure_xvfb        # respawn Xvfb if it died
+    sleep 1
+done
+CSSH_X11D_EOF
+}
+
 # ----------------------------------------------------------------------------
 # SSH config parsing / editing
 # ----------------------------------------------------------------------------
@@ -455,6 +508,62 @@ REMOTE_RC
     ok "shim installed on $host  (relaunch Claude Code there to pick up PATH)"
 }
 
+# Opt-in: give a host a headless X clipboard so Codex (arboard/X11) can paste.
+install_codex_remote() {
+    local host="$1"
+    info "enabling Codex (X11) support on $host ..."
+    emit_x11d | ssh "$host" 'mkdir -p ~/.cssh/bin && cat > ~/.cssh/bin/cssh-x11d && chmod 755 ~/.cssh/bin/cssh-x11d' \
+        || { warn "could not upload the X11 bridge to $host — skipped"; return 1; }
+    local out
+    out="$(ssh "$host" 'bash -s' <<'REMOTE_CODEX'
+set -e
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# Install Xvfb + xclip if missing (best effort, only with passwordless sudo).
+need=""
+have Xvfb  || need="$need xvfb"
+have xclip || need="$need xclip"
+if [ -n "$need" ]; then
+    if have apt-get && sudo -n true 2>/dev/null; then sudo -n apt-get update -y >/dev/null 2>&1 && sudo -n apt-get install -y $need >/dev/null 2>&1 || true
+    elif have dnf   && sudo -n true 2>/dev/null; then sudo -n dnf install -y $need >/dev/null 2>&1 || true
+    elif have pacman && sudo -n true 2>/dev/null; then sudo -n pacman -Sy --noconfirm $need >/dev/null 2>&1 || true
+    fi
+fi
+
+# Point Codex/arboard at the headless X clipboard (marked for cssh uninstall).
+case "${SHELL:-}" in
+  *zsh)  rc="$HOME/.zshrc" ;;
+  *bash) rc="$HOME/.bashrc" ;;
+  *)     rc="$HOME/.profile" ;;
+esac
+line='export DISPLAY=127.0.0.1:99'
+grep -qF "$line" "$rc" 2>/dev/null || printf '\n# cssh: point Codex (arboard/X11) at the headless X clipboard\n%s\n' "$line" >> "$rc"
+
+# (Re)start the supervisor.
+pkill -f "cssh/bin/cssh-x11d" >/dev/null 2>&1 || true
+if have Xvfb && have xclip; then
+    nohup "$HOME/.cssh/bin/cssh-x11d" >"$HOME/.cssh/x11d.log" 2>&1 &
+    sleep 1
+    echo "CSSH_OK"
+else
+    m="need:"; have Xvfb || m="$m Xvfb"; have xclip || m="$m xclip"
+    echo "CSSH_MISSING $m"
+fi
+REMOTE_CODEX
+)" || { warn "Codex setup failed on $host"; return 1; }
+
+    case "$out" in
+        *CSSH_OK*)
+            ok "Codex support live on $host  (Xvfb + X clipboard running)"
+            info "relaunch Codex on $host so it inherits DISPLAY=127.0.0.1:99"
+            ;;
+        *CSSH_MISSING*)
+            warn "Codex bridge uploaded, but ${out#*CSSH_MISSING } — install those on $host, then run: ~/.cssh/bin/cssh-x11d &"
+            ;;
+        *) warn "unexpected response from $host: $out" ;;
+    esac
+}
+
 setup_daemon_autostart() {
     local plist="$HOME/Library/LaunchAgents/com.cssh.daemon.plist"
     mkdir -p "$HOME/Library/LaunchAgents"
@@ -471,12 +580,15 @@ uninstall_remote() {
     info "cleaning $host ..."
     if ssh -o BatchMode=yes -o ConnectTimeout=8 "$host" 'bash -s' <<'REMOTE_UNINSTALL'
 set -e
-# Drop the cssh PATH line (and its comment) from whichever rc files have it.
+# Stop the Codex X11 bridge, if it was ever enabled.
+pkill -f "cssh/bin/cssh-x11d" >/dev/null 2>&1 || true
+pkill -f "Xvfb :99 " >/dev/null 2>&1 || true
+# Drop every "# cssh:" block (PATH shim + DISPLAY) from the shell rc files.
 for rc in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.profile"; do
     [ -f "$rc" ] || continue
-    grep -q '^# cssh: shim xclip' "$rc" 2>/dev/null || continue
+    grep -q '^# cssh:' "$rc" 2>/dev/null || continue
     tmp="$(mktemp)"
-    awk 'c{c=0;next} /^# cssh: shim xclip/{c=1;next} {print}' "$rc" > "$tmp" && mv "$tmp" "$rc"
+    awk 'c{c=0;next} /^# cssh:/{c=1;next} {print}' "$rc" > "$tmp" && mv "$tmp" "$rc"
 done
 rm -rf "$HOME/.cssh"
 REMOTE_UNINSTALL
@@ -555,13 +667,31 @@ uninstall() {
     info "If you bound a hotkey to cssh-push, remove that binding in your launcher."
 }
 
+# Enable Codex support on already-configured hosts (or the ones passed as args).
+enable_codex() {
+    banner
+    step "Enable Codex (X11 clipboard) support"
+    local uhosts=() line
+    if [ "$#" -gt 0 ]; then
+        for line in "$@"; do uhosts+=("$line"); done
+    elif [ -f "$HOME/.cssh/hosts" ]; then
+        while IFS= read -r line; do [ -n "$line" ] && uhosts+=("$line"); done < "$HOME/.cssh/hosts"
+    fi
+    [ "${#uhosts[@]}" -gt 0 ] || die "no hosts found — run the installer first, or pass one: --codex <host>"
+    local h
+    for h in "${uhosts[@]}"; do install_codex_remote "$h"; done
+    printf '\n%s%s Codex support configured.%s\n' "$green" "$bold" "$reset"
+    warn "Relaunch Codex on the remote so it picks up DISPLAY=127.0.0.1:99."
+}
+
 # ----------------------------------------------------------------------------
 # main
 # ----------------------------------------------------------------------------
 main() {
-    # Subcommand: uninstall (works with `... | bash -s -- --uninstall`).
+    # Subcommands (work with `... | bash -s -- <cmd>`).
     case "${1:-}" in
         uninstall|--uninstall|-u|remove|--remove) shift 2>/dev/null || true; uninstall "$@"; return ;;
+        codex|--codex)                            shift 2>/dev/null || true; enable_codex "$@"; return ;;
     esac
 
     banner
@@ -638,6 +768,17 @@ main() {
             ;;
     esac
 
+    # Optional: Codex (and anything using arboard) reads an X clipboard directly,
+    # not the xclip shim, so it needs a headless X server on the remote.
+    local codex_on=0
+    step "Also use Codex? (optional)"
+    info "Codex reads the clipboard over X11, not xclip — it needs a tiny headless"
+    info "X server (Xvfb) on the remote. Claude Code does not; skip this if unsure."
+    if ui_confirm "Set up Codex support on ${reachable[*]}?"; then
+        for h in "${reachable[@]}"; do install_codex_remote "$h"; done
+        codex_on=1
+    fi
+
     # Warm the connection so the first real push is instant.
     ssh -o BatchMode=yes "$primary" true >/dev/null 2>&1 || true
 
@@ -645,6 +786,8 @@ main() {
     info "Hotkey: bind a key to  ${bold}$HOME/.cssh/bin/cssh-push${reset}  (Raycast / Hammerspoon / Shortcuts)"
     info "Then: screenshot → Ctrl+V inside Claude Code on ${bold}$primary${reset}"
     warn "Relaunch Claude Code on the remote so it inherits the shimmed PATH."
+    [ "$codex_on" = "1" ] && warn "Relaunch Codex too — it needs DISPLAY=127.0.0.1:99 from the new shell."
+    info "Enable Codex later on any host:  ${dim}curl -fsSL <install.sh> | bash -s -- --codex <host>${reset}"
     printf '  %s•%s uninstall anytime: %scurl -fsSL %s | bash -s -- --uninstall%s\n' \
         "$blue" "$reset" "$dim" "https://raw.githubusercontent.com/Hackerbone/cssh/main/install.sh" "$reset"
 }
