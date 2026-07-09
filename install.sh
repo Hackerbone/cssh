@@ -126,6 +126,7 @@ ui_choose_multi() {
     # Split explicitly so this behaves the same under bash and zsh.
     local picks pick
     read -ra picks <<< "$line"
+    [ "${#picks[@]}" -gt 0 ] || return 0
     for pick in "${picks[@]}"; do
         [ "$pick" -ge 1 ] 2>/dev/null && [ "$pick" -le "$#" ] && eval "printf '%s\n' \"\${$pick}\""
     done
@@ -486,6 +487,10 @@ main() {
         info "no hosts found in ~/.ssh/config"
         chosen=("➕ Add a custom host")
     fi
+
+    # bash 3.2 (macOS default) treats "${empty[@]}" as unbound under `set -u`,
+    # so guard before iterating. An empty selection means the user picked nothing.
+    [ "${#chosen[@]}" -gt 0 ] || die "no host selected"
 
     local enabled=()
     local h
