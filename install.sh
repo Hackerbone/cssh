@@ -508,14 +508,12 @@ REMOTE_RC
     ok "shim installed on $host  (relaunch Claude Code there to pick up PATH)"
 }
 
-# Opt-in: give a host a headless X clipboard so Codex (arboard/X11) can paste.
-install_codex_remote() {
-    local host="$1"
-    info "enabling Codex (X11) support on $host ..."
-    emit_x11d | ssh "$host" 'mkdir -p ~/.cssh/bin && cat > ~/.cssh/bin/cssh-x11d && chmod 755 ~/.cssh/bin/cssh-x11d' \
-        || { warn "could not upload the X11 bridge to $host — skipped"; return 1; }
-    local out
-    out="$(ssh "$host" 'bash -s' <<'REMOTE_CODEX'
+# The remote-side Codex setup: install deps, wire DISPLAY, start the supervisor.
+# Kept as an emitted script (piped to ssh) rather than a heredoc inside $(...) —
+# macOS bash 3.2 mis-parses that combination. Exit codes report the result:
+# 0 = running, 3 = Xvfb/xclip missing on the remote.
+emit_codex_remote() {
+cat <<'CSSH_CODEX_EOF'
 set -e
 have() { command -v "$1" >/dev/null 2>&1; }
 
@@ -525,7 +523,7 @@ have Xvfb  || need="$need xvfb"
 have xclip || need="$need xclip"
 if [ -n "$need" ]; then
     if have apt-get && sudo -n true 2>/dev/null; then sudo -n apt-get update -y >/dev/null 2>&1 && sudo -n apt-get install -y $need >/dev/null 2>&1 || true
-    elif have dnf   && sudo -n true 2>/dev/null; then sudo -n dnf install -y $need >/dev/null 2>&1 || true
+    elif have dnf    && sudo -n true 2>/dev/null; then sudo -n dnf install -y $need >/dev/null 2>&1 || true
     elif have pacman && sudo -n true 2>/dev/null; then sudo -n pacman -Sy --noconfirm $need >/dev/null 2>&1 || true
     fi
 fi
@@ -539,28 +537,37 @@ esac
 line='export DISPLAY=127.0.0.1:99'
 grep -qF "$line" "$rc" 2>/dev/null || printf '\n# cssh: point Codex (arboard/X11) at the headless X clipboard\n%s\n' "$line" >> "$rc"
 
-# (Re)start the supervisor.
+# (Re)start the supervisor. Detach fully so ssh doesn't hang on the channel.
 pkill -f "cssh/bin/cssh-x11d" >/dev/null 2>&1 || true
 if have Xvfb && have xclip; then
-    nohup "$HOME/.cssh/bin/cssh-x11d" >"$HOME/.cssh/x11d.log" 2>&1 &
-    sleep 1
-    echo "CSSH_OK"
-else
-    m="need:"; have Xvfb || m="$m Xvfb"; have xclip || m="$m xclip"
-    echo "CSSH_MISSING $m"
+    nohup "$HOME/.cssh/bin/cssh-x11d" >"$HOME/.cssh/x11d.log" 2>&1 </dev/null &
+    exit 0
 fi
-REMOTE_CODEX
-)" || { warn "Codex setup failed on $host"; return 1; }
+exit 3
+CSSH_CODEX_EOF
+}
 
-    case "$out" in
-        *CSSH_OK*)
+# Opt-in: give a host a headless X clipboard so Codex (arboard/X11) can paste.
+install_codex_remote() {
+    local host="$1"
+    info "enabling Codex (X11) support on $host ..."
+    emit_x11d | ssh "$host" 'mkdir -p ~/.cssh/bin && cat > ~/.cssh/bin/cssh-x11d && chmod 755 ~/.cssh/bin/cssh-x11d' \
+        || { warn "could not upload the X11 bridge to $host — skipped"; return 1; }
+
+    local code=0
+    emit_codex_remote | ssh "$host" 'bash -s' || code=$?
+    case "$code" in
+        0)
             ok "Codex support live on $host  (Xvfb + X clipboard running)"
             info "relaunch Codex on $host so it inherits DISPLAY=127.0.0.1:99"
             ;;
-        *CSSH_MISSING*)
-            warn "Codex bridge uploaded, but ${out#*CSSH_MISSING } — install those on $host, then run: ~/.cssh/bin/cssh-x11d &"
+        3)
+            warn "Xvfb/xclip missing on $host — install them, then run: ~/.cssh/bin/cssh-x11d &"
             ;;
-        *) warn "unexpected response from $host: $out" ;;
+        *)
+            warn "Codex setup failed on $host (ssh exit $code)"
+            return 1
+            ;;
     esac
 }
 
