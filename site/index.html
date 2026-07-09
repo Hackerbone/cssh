@@ -140,6 +140,26 @@
     .term-body{min-height:auto}
   }
 
+  /* ---------- demo video ---------- */
+  .demo{padding:70px 0 8px}
+  .demo-head{max-width:52ch;margin:0 auto 34px;text-align:center}
+  .demo-head .eyebrow{justify-content:center}
+  .demo-head h2{font-family:var(--display);font-weight:600;
+    font-size:clamp(1.8rem,3.6vw,2.6rem);letter-spacing:-.03em;line-height:1.08;margin:16px 0 0}
+  .demo-head p{color:var(--muted);font-size:1.06rem;margin:14px 0 0}
+  .player{position:relative;max-width:900px;margin:0 auto;background:var(--crust);
+    border:1px solid var(--line-strong);border-radius:16px;overflow:hidden;
+    box-shadow:0 50px 100px -45px rgba(0,0,0,.9),0 0 0 1px rgba(255,135,215,.05)}
+  /* soft pink halo behind the player */
+  .player::before{content:"";position:absolute;inset:-1px;z-index:-1;border-radius:18px;
+    background:radial-gradient(120% 130% at 50% 0%, rgba(255,135,215,.16), transparent 55%);
+    filter:blur(24px)}
+  .player-bar{display:flex;align-items:center;gap:8px;padding:13px 16px;
+    background:var(--mantle);border-bottom:1px solid var(--line)}
+  .player-title{margin-left:8px;font-family:var(--mono);font-size:.74rem;color:var(--faint)}
+  .player-frame{position:relative;aspect-ratio:16/9;background:#000}
+  .player-frame iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
+
   /* ---------- bridge ---------- */
   .bridge{padding:64px 0 24px}
   .bridge-card{background:var(--mantle);border:1px solid var(--line);border-radius:18px;
@@ -248,6 +268,7 @@
   <div class="wrap nav-in">
     <a href="#top" class="brand">cssh<span class="caret"></span></a>
     <div class="nav-links">
+      <a href="#demo" class="hide-sm">Demo</a>
       <a href="#how" class="hide-sm">How it works</a>
       <a href="#platforms" class="hide-sm">Platforms</a>
       <a class="nav-gh" href="https://github.com/Hackerbone/cssh" target="_blank" rel="noopener">GitHub ↗</a>
@@ -279,6 +300,29 @@
     </div>
   </div>
 </header>
+
+<section class="demo" id="demo">
+  <div class="wrap">
+    <div class="demo-head">
+      <span class="eyebrow">Watch it work</span>
+      <h2>Laptop to remote, in one paste.</h2>
+      <p>Screenshot on the Mac, <kbd>Ctrl</kbd>+<kbd>V</kbd> in the SSH session — no detours.</p>
+    </div>
+    <div class="player">
+      <div class="player-bar">
+        <span class="dot p"></span><span class="dot m"></span><span class="dot g"></span>
+        <span class="player-title">cssh — live demo</span>
+      </div>
+      <div class="player-frame">
+        <iframe src="https://www.youtube-nocookie.com/embed/0kqvMjhXHFM?rel=0"
+          title="cssh — paste local screenshots into your remote coding agent over SSH"
+          loading="lazy"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+      </div>
+    </div>
+  </div>
+</section>
 
 <section class="bridge">
   <div class="wrap">
