@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>cssh — paste local screenshots into Claude Code over SSH</title>
+<meta name="description" content="Screenshot on your laptop, press Ctrl+V in a remote Claude Code session. cssh bridges your local clipboard to any Linux box over SSH — one setup script, a few KB, no runtime deps beyond bash + ssh." />
+<meta name="theme-color" content="#17151f" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="cssh — paste local screenshots into Claude Code over SSH" />
+<meta property="og:description" content="Screenshot on your laptop, press Ctrl+V in a remote Claude Code session. One setup script, a few KB, zero runtime deps." />
+<meta property="og:url" content="https://cssh.ssitaraman.com" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%2317151f'/%3E%3Cpath%20d='M8%2011l4.5%204.5L8%2020'%20fill='none'%20stroke='%23a6e3a1'%20stroke-width='2.4'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3Crect%20x='16'%20y='18.5'%20width='9'%20height='3'%20rx='1.2'%20fill='%23ff87d7'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;450;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --base:#17151f;      /* warm purple-charcoal, not pure black */
+    --mantle:#1c1a27;
+    --surface:#211f2e;
+    --crust:#0f0e16;
+    --line:rgba(203,166,247,.13);
+    --line-strong:rgba(203,166,247,.22);
+    --text:#e9e7f3;
+    --muted:#a29fb8;
+    --faint:#726f88;
+    --pink:#ff87d7;      /* gum accent — xterm 212 */
+    --pink-soft:#ffb3e6;
+    --mauve:#cba6f7;     /* installer › steps */
+    --green:#a6e3a1;     /* ✓ ok */
+    --blue:#89b4fa;      /* • info */
+    --red:#f38ba8;       /* ! warn */
+    --yellow:#f9e2af;
+    --display:"Space Grotesk",system-ui,sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --body:"Inter",system-ui,sans-serif;
+    --maxw:1120px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--base);color:var(--text);
+    font-family:var(--body);font-size:16px;line-height:1.6;
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+    overflow-x:hidden;
+  }
+  /* ambient: one restrained pink glow behind the hero terminal */
+  body::before{
+    content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:
+      radial-gradient(700px 480px at 78% 8%, rgba(255,135,215,.10), transparent 60%),
+      radial-gradient(680px 520px at 6% 96%, rgba(203,166,247,.07), transparent 62%);
+  }
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 28px;position:relative;z-index:1}
+  .accent{color:var(--pink)}
+  .eyebrow{
+    font-family:var(--mono);font-size:.72rem;font-weight:500;
+    letter-spacing:.2em;text-transform:uppercase;color:var(--pink);
+    display:inline-flex;align-items:center;gap:.6em;
+  }
+  .eyebrow::before{content:"";width:22px;height:1px;background:var(--pink);opacity:.7}
+
+  /* ---------- nav ---------- */
+  .nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(12px);
+    background:rgba(23,21,31,.72);border-bottom:1px solid var(--line)}
+  .nav-in{display:flex;align-items:center;justify-content:space-between;height:64px}
+  .brand{font-family:var(--mono);font-weight:700;font-size:1.05rem;letter-spacing:-.01em;
+    display:inline-flex;align-items:center;gap:.05em;color:var(--text)}
+  .brand .caret{display:inline-block;width:.56em;height:1.05em;background:var(--pink);
+    margin-left:.18em;transform:translateY(.12em);border-radius:1px;animation:blink 1.15s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+  .nav-links{display:flex;align-items:center;gap:30px;font-size:.92rem;color:var(--muted);
+    font-family:var(--mono);letter-spacing:-.01em}
+  .nav-links a{transition:color .18s}
+  .nav-links a:hover{color:var(--text)}
+  .nav-gh{color:var(--text)!important;border:1px solid var(--line-strong);
+    padding:7px 15px;border-radius:8px;transition:border-color .18s,background .18s}
+  .nav-gh:hover{border-color:var(--pink);background:rgba(255,135,215,.08)}
+  @media(max-width:720px){.nav-links .hide-sm{display:none}}
+
+  /* ---------- hero ---------- */
+  .hero{padding:78px 0 40px;position:relative}
+  .hero-grid{display:grid;grid-template-columns:1.02fr 1.15fr;gap:56px;align-items:center}
+  h1{font-family:var(--display);font-weight:600;
+    font-size:clamp(2.5rem,5.6vw,4.15rem);line-height:1.03;letter-spacing:-.035em;
+    margin:22px 0 0}
+  .lede{color:var(--muted);font-size:1.12rem;line-height:1.62;max-width:34ch;margin:22px 0 0}
+  .lede b{color:var(--text);font-weight:500}
+  kbd{font-family:var(--mono);font-size:.82em;background:var(--surface);
+    border:1px solid var(--line-strong);border-bottom-width:2px;border-radius:6px;
+    padding:.08em .45em;color:var(--text);white-space:nowrap}
+
+  /* install command block */
+  .cmd{margin-top:30px;display:flex;align-items:stretch;max-width:520px;
+    background:var(--crust);border:1px solid var(--line-strong);border-radius:11px;
+    font-family:var(--mono);overflow:hidden;box-shadow:0 10px 40px -20px rgba(0,0,0,.7)}
+  .cmd-text{padding:15px 16px;font-size:.83rem;line-height:1.4;color:var(--text);
+    overflow-x:auto;white-space:nowrap;flex:1;scrollbar-width:none}
+  .cmd-text::-webkit-scrollbar{display:none}
+  .cmd-text .p{color:var(--pink);user-select:none}
+  .cmd-copy{flex:none;border:0;border-left:1px solid var(--line-strong);
+    background:transparent;color:var(--muted);font-family:var(--mono);font-size:.75rem;
+    padding:0 16px;cursor:pointer;transition:color .18s,background .18s;letter-spacing:.02em}
+  .cmd-copy:hover{color:var(--pink);background:rgba(255,135,215,.07)}
+  .cmd-copy.done{color:var(--green)}
+  .microcopy{margin-top:15px;font-family:var(--mono);font-size:.78rem;color:var(--faint);
+    letter-spacing:-.01em}
+  .microcopy b{color:var(--mauve);font-weight:500}
+
+  /* ---------- terminal (signature) ---------- */
+  .term{background:var(--crust);border:1px solid var(--line-strong);border-radius:14px;
+    overflow:hidden;box-shadow:0 40px 90px -40px rgba(0,0,0,.85),0 0 0 1px rgba(255,135,215,.05);
+    font-family:var(--mono)}
+  .term-bar{display:flex;align-items:center;gap:8px;padding:13px 16px;
+    background:var(--mantle);border-bottom:1px solid var(--line)}
+  .dot{width:11px;height:11px;border-radius:50%}
+  .dot.p{background:var(--pink)}.dot.m{background:var(--mauve)}.dot.g{background:var(--green)}
+  .term-title{margin-left:8px;font-size:.74rem;color:var(--faint);letter-spacing:.02em}
+  .term-body{padding:20px 20px 24px;font-size:.82rem;line-height:1.62;
+    min-height:352px;white-space:pre-wrap;word-break:break-word}
+  .ln{opacity:0;transform:translateY(4px);animation:rise .32s ease forwards}
+  .co{color:var(--pink);font-weight:700}     /* cssh brand */
+  .st{color:var(--mauve)}                      /* › step */
+  .ok{color:var(--green)}                      /* ✓ */
+  .in{color:var(--blue)}                        /* • */
+  .mut{color:var(--faint)}
+  .sel{color:var(--pink)}                       /* selected host */
+  .dim{color:var(--muted)}
+  .cur{display:inline-block;width:.5em;height:1.05em;background:var(--pink);
+    transform:translateY(.16em);border-radius:1px;animation:blink 1.15s steps(1) infinite}
+  @keyframes rise{to{opacity:1;transform:none}}
+  @media(max-width:900px){
+    .hero-grid{grid-template-columns:1fr;gap:40px}
+    .term-body{min-height:auto}
+  }
+
+  /* ---------- bridge ---------- */
+  .bridge{padding:64px 0 24px}
+  .bridge-card{background:var(--mantle);border:1px solid var(--line);border-radius:18px;
+    padding:38px 34px;display:grid;grid-template-columns:1fr auto 1fr;gap:26px;align-items:center}
+  .node{text-align:center}
+  .node .cap{font-family:var(--mono);font-size:.72rem;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--faint);margin-bottom:12px}
+  .node .box{border:1px solid var(--line-strong);border-radius:12px;padding:20px 18px;
+    background:var(--crust)}
+  .node .big{font-family:var(--display);font-weight:500;font-size:1.15rem;color:var(--text)}
+  .node .sub{font-size:.86rem;color:var(--muted);margin-top:5px}
+  .link{display:flex;flex-direction:column;align-items:center;gap:8px;min-width:150px}
+  .link .wire{position:relative;width:100%;height:2px;
+    background:linear-gradient(90deg,var(--mauve),var(--pink));border-radius:2px}
+  .link .wire::after{content:"▶";position:absolute;right:-4px;top:50%;
+    transform:translateY(-50%);color:var(--pink);font-size:.7rem}
+  .link .lbl{font-family:var(--mono);font-size:.72rem;color:var(--pink);letter-spacing:.02em}
+  .link .sub2{font-family:var(--mono);font-size:.66rem;color:var(--faint)}
+  .bridge-note{margin-top:26px;color:var(--muted);font-size:1.02rem;max-width:60ch}
+  .bridge-note b{color:var(--text);font-weight:500}
+  @media(max-width:760px){
+    .bridge-card{grid-template-columns:1fr;gap:18px}
+    .link{transform:rotate(90deg);height:64px;min-width:0}
+  }
+
+  /* ---------- section heads ---------- */
+  .sec-head{margin-bottom:44px;max-width:52ch}
+  .sec-head h2{font-family:var(--display);font-weight:600;
+    font-size:clamp(1.8rem,3.6vw,2.6rem);letter-spacing:-.03em;line-height:1.08;margin:16px 0 0}
+  .sec-head p{color:var(--muted);font-size:1.06rem;margin:14px 0 0}
+
+  /* ---------- steps ---------- */
+  .steps{padding:78px 0}
+  .step-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+  .step{border:1px solid var(--line);border-radius:15px;padding:28px 24px 30px;
+    background:var(--mantle);position:relative;transition:border-color .2s,transform .2s}
+  .step:hover{border-color:var(--line-strong);transform:translateY(-3px)}
+  .step .no{font-family:var(--mono);font-size:.8rem;color:var(--pink);font-weight:700;
+    letter-spacing:.06em}
+  .step h3{font-family:var(--display);font-weight:500;font-size:1.28rem;margin:16px 0 0;
+    letter-spacing:-.01em}
+  .step p{color:var(--muted);font-size:.96rem;margin:11px 0 0}
+  .step p code,.mechanism code,.feat p code{font-family:var(--mono);font-size:.86em;
+    color:var(--mauve);background:rgba(203,166,247,.1);padding:.06em .38em;border-radius:5px}
+  .mechanism{margin-top:26px;font-family:var(--mono);font-size:.82rem;color:var(--faint);
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .mechanism .dotsep{color:var(--line-strong)}
+  @media(max-width:820px){.step-grid{grid-template-columns:1fr}}
+
+  /* ---------- features ---------- */
+  .features{padding:20px 0 78px}
+  .feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+  .feat{background:var(--base);padding:30px 26px;transition:background .2s}
+  .feat:hover{background:var(--mantle)}
+  .feat .ic{font-family:var(--mono);color:var(--pink);font-size:1.05rem;font-weight:700}
+  .feat h3{font-family:var(--display);font-weight:500;font-size:1.12rem;margin:14px 0 0;
+    letter-spacing:-.01em}
+  .feat p{color:var(--muted);font-size:.93rem;margin:9px 0 0;line-height:1.55}
+  @media(max-width:820px){.feat-grid{grid-template-columns:1fr}}
+
+  /* ---------- platforms ---------- */
+  .platforms{padding:0 0 82px}
+  .plat-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  .plat{border:1px solid var(--line);border-radius:15px;padding:28px 26px;background:var(--mantle)}
+  .plat .cap{font-family:var(--mono);font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--pink);margin-bottom:16px}
+  .plat ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:9px}
+  .plat li{font-family:var(--mono);font-size:.82rem;color:var(--text);
+    border:1px solid var(--line-strong);border-radius:7px;padding:7px 12px;background:var(--crust)}
+  .plat .note{margin-top:16px;font-size:.88rem;color:var(--faint);line-height:1.55}
+  .plat .note b{color:var(--muted);font-weight:500}
+  @media(max-width:680px){.plat-grid{grid-template-columns:1fr}}
+
+  /* ---------- cta ---------- */
+  .cta{padding:20px 0 96px}
+  .cta-card{border:1px solid var(--line-strong);border-radius:20px;padding:56px 40px;
+    text-align:center;background:
+      radial-gradient(120% 140% at 50% 0%, rgba(255,135,215,.09), transparent 55%),var(--mantle)}
+  .cta-card h2{font-family:var(--display);font-weight:600;font-size:clamp(1.9rem,4vw,2.7rem);
+    letter-spacing:-.03em;margin:0}
+  .cta-card p{color:var(--muted);margin:16px auto 0;max-width:44ch}
+  .cta-card .cmd{margin:30px auto 0}
+  .cta-card .then{margin-top:18px;font-family:var(--mono);font-size:.84rem;color:var(--faint)}
+  .cta-card .then b{color:var(--pink);font-weight:500}
+
+  /* ---------- footer ---------- */
+  .foot{border-top:1px solid var(--line);padding:36px 0 54px}
+  .foot-in{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}
+  .foot .brand{font-size:.98rem}
+  .foot-links{display:flex;gap:24px;font-family:var(--mono);font-size:.85rem;color:var(--muted)}
+  .foot-links a:hover{color:var(--pink)}
+  .foot .made{font-family:var(--mono);font-size:.78rem;color:var(--faint)}
+
+  @media(prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto}
+    .ln{animation:none!important;opacity:1;transform:none}
+    .cur,.brand .caret{animation:none}
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap nav-in">
+    <a href="#top" class="brand">cssh<span class="caret"></span></a>
+    <div class="nav-links">
+      <a href="#how" class="hide-sm">How it works</a>
+      <a href="#platforms" class="hide-sm">Platforms</a>
+      <a class="nav-gh" href="https://github.com/Hackerbone/cssh" target="_blank" rel="noopener">GitHub ↗</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow">Clipboard → SSH, for Claude Code</span>
+      <h1>Paste local screenshots into <span class="accent">remote Claude&nbsp;Code</span>.</h1>
+      <p class="lede">Claude Code reads the <b>remote box's</b> clipboard, so a normal paste never sees the screenshot on your laptop. cssh bridges the two — screenshot, then press <kbd>Ctrl</kbd>+<kbd>V</kbd> in your SSH session.</p>
+
+      <div class="cmd" role="group" aria-label="Install command">
+        <div class="cmd-text" id="cmd"><span class="p">$ </span>curl -fsSL https://raw.githubusercontent.com/Hackerbone/cssh/main/install.sh | bash</div>
+        <button class="cmd-copy" id="copy" aria-label="Copy install command">copy</button>
+      </div>
+      <p class="microcopy">One setup script · <b>a few KB</b> · no runtime deps beyond <b>bash</b> + <b>ssh</b></p>
+    </div>
+
+    <div class="term" aria-hidden="true">
+      <div class="term-bar">
+        <span class="dot p"></span><span class="dot m"></span><span class="dot g"></span>
+        <span class="term-title">laptop — install.sh</span>
+      </div>
+      <div class="term-body" id="tbody"></div>
+    </div>
+  </div>
+</header>
+
+<section class="bridge">
+  <div class="wrap">
+    <div class="bridge-card">
+      <div class="node">
+        <div class="cap">Your laptop</div>
+        <div class="box">
+          <div class="big">Clipboard</div>
+          <div class="sub">the screenshot you just took</div>
+        </div>
+      </div>
+      <div class="link">
+        <div class="lbl">warm ssh socket</div>
+        <div class="wire"></div>
+        <div class="sub2">multiplexed · ~instant</div>
+      </div>
+      <div class="node">
+        <div class="cap">Remote box</div>
+        <div class="box">
+          <div class="big">xclip shim</div>
+          <div class="sub">serves the image to Claude Code</div>
+        </div>
+      </div>
+    </div>
+    <p class="bridge-note"><b>The gap:</b> your image lives in your laptop's clipboard; Claude Code, running over SSH, only ever asks the remote's. cssh ships the bytes across a connection that's already warm — no X server, no OSC 52, no copy-paste dance.</p>
+  </div>
+</section>
+
+<section class="steps" id="how">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">How it works</span>
+      <h2>Three steps. The middle one is invisible.</h2>
+      <p>A real sequence, start to finish — capture on your machine, sync over SSH, paste on the remote.</p>
+    </div>
+    <div class="step-grid">
+      <div class="step">
+        <div class="no">01 — Screenshot</div>
+        <h3>Capture on your laptop</h3>
+        <p>Grab anything the way you always do. It lands in your local clipboard — nothing new to learn.</p>
+      </div>
+      <div class="step">
+        <div class="no">02 — Sync</div>
+        <h3>Ship it over SSH</h3>
+        <p>A background daemon (or your hotkey) pushes the PNG to <code>~/.cssh/latest.png</code> on the remote over a multiplexed connection.</p>
+      </div>
+      <div class="step">
+        <div class="no">03 — Paste</div>
+        <h3>Press Ctrl+V in Claude Code</h3>
+        <p>A shimmed <code>xclip</code>, ahead of the real one on <code>PATH</code>, serves your image once — then gets out of the way.</p>
+      </div>
+    </div>
+    <div class="mechanism">
+      <span>No X server</span><span class="dotsep">·</span>
+      <span>No Xvfb</span><span class="dotsep">·</span>
+      <span>No OSC&nbsp;52</span><span class="dotsep">·</span>
+      <span>one-shot with a TTL, so your next paste is plain text again</span>
+    </div>
+  </div>
+</section>
+
+<section class="features">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Why it's tiny</span>
+      <h2>Small enough to read before you run it.</h2>
+    </div>
+    <div class="feat-grid">
+      <div class="feat">
+        <div class="ic">$_</div>
+        <h3>One clean script</h3>
+        <p>Every component embeds in a single installer. Pipe it to bash — no secondary downloads, no package to trust.</p>
+      </div>
+      <div class="feat">
+        <div class="ic">≈KB</div>
+        <h3>A few kilobytes</h3>
+        <p>The whole thing is a handful of bash scripts. Auditable in one sitting; you can read every line.</p>
+      </div>
+      <div class="feat">
+        <div class="ic">⇄</div>
+        <h3>Near-instant pushes</h3>
+        <p>SSH connection multiplexing keeps a warm socket open, so images land in milliseconds — not a fresh handshake each time.</p>
+      </div>
+      <div class="feat">
+        <div class="ic">1×</div>
+        <h3>One-shot by design</h3>
+        <p>Each image is served once, with a TTL guard. Paste an image, then your very next paste is ordinary text.</p>
+      </div>
+      <div class="feat">
+        <div class="ic">∅</div>
+        <h3>Zero runtime deps</h3>
+        <p>Your laptop needs only <code>bash</code> + <code>ssh</code>. The remote needs <code>bash</code>, <code>stat</code>, <code>date</code>. That's it.</p>
+      </div>
+      <div class="feat">
+        <div class="ic">◇</div>
+        <h3>gum, or not</h3>
+        <p>Pretty menus with <code>gum</code> when it's installed, a clean built-in numbered menu when it isn't. Your call.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="platforms" id="platforms">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Platforms</span>
+      <h2>Runs where you already work.</h2>
+    </div>
+    <div class="plat-grid">
+      <div class="plat">
+        <div class="cap">Local — where you screenshot</div>
+        <ul>
+          <li>macOS</li>
+          <li>Linux · X11</li>
+          <li>Linux · Wayland</li>
+          <li>Windows · Git Bash</li>
+        </ul>
+        <p class="note">Reads your OS clipboard natively — <b>osascript</b> on macOS, <b>wl-paste</b> / <b>xclip</b> on Linux, <b>PowerShell</b> on Windows.</p>
+      </div>
+      <div class="plat">
+        <div class="cap">Remote — where Claude Code runs</div>
+        <ul>
+          <li>Any Linux box you SSH into</li>
+          <li>WSL</li>
+          <li>Cloud dev boxes</li>
+        </ul>
+        <p class="note">The shim hooks the exact <b>xclip</b> calls Claude Code makes on Linux. Bash, <b>stat</b>, and <b>date</b> are all it needs.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="cta">
+  <div class="wrap">
+    <div class="cta-card">
+      <h2>Set it up in one line.</h2>
+      <p>Run it on your laptop. It reads <code style="font-family:var(--mono);color:var(--mauve)">~/.ssh/config</code>, lets you pick your hosts, and wires up both ends.</p>
+      <div class="cmd" role="group" aria-label="Install command">
+        <div class="cmd-text" id="cmd2"><span class="p">$ </span>curl -fsSL https://raw.githubusercontent.com/Hackerbone/cssh/main/install.sh | bash</div>
+        <button class="cmd-copy" id="copy2" aria-label="Copy install command">copy</button>
+      </div>
+      <p class="then">then <b>screenshot → Ctrl+V</b> inside Claude Code on the remote</p>
+    </div>
+  </div>
+</section>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <a href="#top" class="brand">cssh<span class="caret"></span></a>
+    <div class="foot-links">
+      <a href="https://github.com/Hackerbone/cssh" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/Hackerbone/cssh#readme" target="_blank" rel="noopener">Docs</a>
+      <a href="https://github.com/Hackerbone/cssh/blob/main/LICENSE" target="_blank" rel="noopener">MIT</a>
+    </div>
+    <span class="made">built for terminal-first developers</span>
+  </div>
+</footer>
+
+<script>
+  // Copy-to-clipboard for both install blocks.
+  const CMD = "curl -fsSL https://raw.githubusercontent.com/Hackerbone/cssh/main/install.sh | bash";
+  function wireCopy(btnId){
+    const btn = document.getElementById(btnId);
+    if(!btn) return;
+    btn.addEventListener("click", async () => {
+      try{ await navigator.clipboard.writeText(CMD); }
+      catch(e){ /* clipboard blocked — no-op, command is visible */ }
+      const prev = btn.textContent;
+      btn.textContent = "copied ✓"; btn.classList.add("done");
+      setTimeout(() => { btn.textContent = prev; btn.classList.remove("done"); }, 1600);
+    });
+  }
+  wireCopy("copy"); wireCopy("copy2");
+
+  // Signature terminal — a faithful replay of the real install session.
+  const LINES = [
+    ['<span class="mut">$ </span>curl -fsSL .../install.sh | bash', 0],
+    ['', 90],
+    ['  <span class="co">cssh</span>  <span class="mut">clipboard images into Claude Code over SSH</span>', 120],
+    ['', 60],
+    ['<span class="st">› Choose which SSH host(s) to enable</span>', 150],
+    ['  <span class="mut">Hosts from ~/.ssh/config — press x/space, then enter</span>', 90],
+    ['  <span class="sel">&gt; ✓ buggy</span>', 130],
+    ['    <span class="dim">• demo-cloud</span>', 60],
+    ['    <span class="dim">• langfuse</span>', 60],
+    ['    <span class="dim">➕ Add a custom host</span>', 90],
+    ['', 60],
+    ['  <span class="ok">✓</span> enabled SSH multiplexing for buggy', 150],
+    ['<span class="st">› Installing remote shim over SSH</span>', 150],
+    ['  <span class="ok">✓</span> shim installed on buggy', 150],
+    ['<span class="st">› How do you want to trigger pushes?</span>', 150],
+    ['  <span class="ok">✓</span> daemon auto-starts at login', 160],
+    ['', 70],
+    ['  <span class="ok">✓ All set.</span>', 180],
+    ['  <span class="mut">screenshot → </span><span class="sel">Ctrl+V</span><span class="mut"> in Claude Code on buggy</span>', 0],
+  ];
+  const body = document.getElementById("tbody");
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function render(html){
+    const div = document.createElement("div");
+    div.className = "ln"; div.innerHTML = html === "" ? "&nbsp;" : html;
+    body.appendChild(div);
+  }
+  function tail(){
+    const cur = document.createElement("span");
+    cur.className = "cur"; cur.style.marginLeft = ".15em";
+    body.lastChild.appendChild(cur);
+  }
+  if(reduce){
+    LINES.forEach(([h]) => render(h)); tail();
+  } else {
+    let i = 0;
+    (function step(){
+      if(i >= LINES.length){ tail(); return; }
+      const [html, delay] = LINES[i++];
+      render(html);
+      setTimeout(step, 120 + delay);
+    })();
+  }
+</script>
+</body>
+</html>
