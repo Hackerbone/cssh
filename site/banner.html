@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;450;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --base:#17151f;--mantle:#1c1a27;--crust:#0f0e16;
+    --line:rgba(203,166,247,.13);--line-strong:rgba(203,166,247,.22);
+    --text:#e9e7f3;--muted:#a29fb8;--faint:#726f88;
+    --pink:#ff87d7;--mauve:#cba6f7;--green:#a6e3a1;--blue:#89b4fa;
+    --display:"Space Grotesk",sans-serif;--mono:"JetBrains Mono",monospace;--body:"Inter",sans-serif;
+  }
+  *{margin:0;box-sizing:border-box}
+  html,body{width:1280px;height:640px;overflow:hidden;background:var(--base);color:var(--text);font-family:var(--body)}
+  .stage{width:1280px;height:640px;position:relative;
+    background:
+      radial-gradient(640px 460px at 84% 6%, rgba(255,135,215,.13), transparent 60%),
+      radial-gradient(560px 460px at 2% 100%, rgba(203,166,247,.09), transparent 62%),
+      var(--base);
+    display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:40px;padding:64px 64px}
+  .left{max-width:520px}
+  .brand{font-family:var(--mono);font-weight:700;font-size:2.6rem;letter-spacing:-.02em;
+    display:inline-flex;align-items:center;color:var(--text)}
+  .brand .caret{width:.5em;height:1em;background:var(--pink);margin-left:.16em;transform:translateY(.1em);border-radius:2px}
+  .eyebrow{font-family:var(--mono);font-size:.8rem;font-weight:500;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--pink);margin:20px 0 0;display:flex;align-items:center;gap:.7em}
+  .eyebrow::before{content:"";width:26px;height:1px;background:var(--pink);opacity:.7}
+  h1{font-family:var(--display);font-weight:600;font-size:2.85rem;line-height:1.04;
+    letter-spacing:-.035em;margin:14px 0 0}
+  h1 .accent{color:var(--pink)}
+  .cmd{margin-top:26px;display:inline-flex;align-items:center;background:var(--crust);
+    border:1px solid var(--line-strong);border-radius:11px;font-family:var(--mono);
+    font-size:.92rem;padding:14px 18px;color:var(--text);box-shadow:0 12px 40px -20px rgba(0,0,0,.7)}
+  .cmd .p{color:var(--pink);margin-right:.5em}
+  .works{margin-top:22px;font-family:var(--mono);font-size:.82rem;color:var(--faint)}
+  .works b{color:var(--text);font-weight:500}
+  .url{position:absolute;left:64px;bottom:44px;font-family:var(--mono);font-size:.86rem;color:var(--mauve)}
+
+  .term{background:var(--crust);border:1px solid var(--line-strong);border-radius:15px;overflow:hidden;
+    box-shadow:0 44px 90px -40px rgba(0,0,0,.85);font-family:var(--mono);width:100%}
+  .bar{display:flex;align-items:center;gap:9px;padding:15px 18px;background:var(--mantle);border-bottom:1px solid var(--line)}
+  .dot{width:12px;height:12px;border-radius:50%}
+  .p{background:var(--pink)}.m{background:var(--mauve)}.g{background:var(--green)}
+  .title{margin-left:9px;font-size:.8rem;color:var(--faint)}
+  .body{padding:22px 22px 26px;font-size:.9rem;line-height:1.66;white-space:pre-wrap}
+  .co{color:var(--pink);font-weight:700}.st{color:var(--mauve)}.ok{color:var(--green)}
+  .mut{color:var(--faint)}.sel{color:var(--pink)}.dim{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="left">
+    <span class="brand">cssh<span class="caret"></span></span>
+    <div class="eyebrow">Clipboard → SSH</div>
+    <h1>Paste local screenshots into your <span class="accent">remote coding&nbsp;agent</span>.</h1>
+    <div class="cmd"><span class="p">$</span>curl -fsSL …/install.sh | bash</div>
+    <div class="works">Works with <b>Claude Code</b> · <b>Codex</b> · any <b>xclip</b> TUI</div>
+  </div>
+
+  <div class="term">
+    <div class="bar">
+      <span class="dot p"></span><span class="dot m"></span><span class="dot g"></span>
+      <span class="title">laptop — install.sh</span>
+    </div>
+    <div class="body"><span class="mut">$ </span>curl -fsSL .../install.sh | bash
+
+  <span class="co">cssh</span>  <span class="mut">clipboard images into your agent over SSH</span>
+
+<span class="st">› Choose which SSH host(s) to enable</span>
+  <span class="sel">&gt; ✓ dev-box</span>
+    <span class="dim">• gpu-01</span>
+    <span class="dim">• staging</span>
+
+  <span class="ok">✓</span> shim installed on dev-box
+  <span class="ok">✓ All set.</span>
+  <span class="mut">screenshot → </span><span class="sel">Ctrl+V</span><span class="mut"> in your agent</span></div>
+  </div>
+
+  <div class="url">cssh.ssitaraman.com</div>
+</div>
+</body>
+</html>

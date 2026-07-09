@@ -1,9 +1,22 @@
-# cssh
+<p align="center">
+  <img src="assets/banner.png" alt="cssh — paste local screenshots into your remote coding agent over SSH" width="840">
+</p>
 
-**Paste local clipboard images into Claude Code over SSH.** Screenshot on your
-laptop, press <kbd>Ctrl</kbd>+<kbd>V</kbd> in a remote Claude Code session, done.
+<h1 align="center">cssh</h1>
 
-Claude Code runs on a remote box and reads the *remote's* clipboard, so a normal
+<p align="center">
+  <b>Paste local clipboard images into your remote coding agent over SSH.</b><br>
+  Screenshot on your laptop, press <kbd>Ctrl</kbd>+<kbd>V</kbd> in a remote session — works with
+  <b>Claude Code</b>, <b>Codex</b>, or any terminal app that reads <code>xclip</code>.
+</p>
+
+<p align="center">
+  <a href="https://cssh.ssitaraman.com"><b>cssh.ssitaraman.com</b></a>
+</p>
+
+---
+
+Your agent runs on a remote box and reads the *remote's* clipboard, so a normal
 paste never sees the screenshot sitting in your *laptop's* clipboard. `cssh`
 bridges the two.
 
@@ -31,8 +44,8 @@ Shortcuts, or Karabiner.
 
 ## How it works
 
-Claude Code reads pasted images on Linux by shelling out to `xclip` (verified
-against the Claude Code binary):
+Claude Code — and other terminal agents like Codex — read pasted images on Linux
+by shelling out to `xclip` (verified against the Claude Code binary):
 
 ```
 xclip -selection clipboard -t TARGETS   -o    # is an image available?

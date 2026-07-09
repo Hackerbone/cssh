@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>cssh — paste local screenshots into Claude Code over SSH</title>
-<meta name="description" content="Screenshot on your laptop, press Ctrl+V in a remote Claude Code session. cssh bridges your local clipboard to any Linux box over SSH — one setup script, a few KB, no runtime deps beyond bash + ssh." />
+<title>cssh — paste local screenshots into your remote coding agent over SSH</title>
+<meta name="description" content="Screenshot on your laptop, press Ctrl+V in a remote Claude Code, Codex, or any xclip-based terminal session. cssh bridges your local clipboard to any Linux box over SSH — one setup script, a few KB, no runtime deps beyond bash + ssh." />
 <meta name="theme-color" content="#17151f" />
 <meta property="og:type" content="website" />
-<meta property="og:title" content="cssh — paste local screenshots into Claude Code over SSH" />
-<meta property="og:description" content="Screenshot on your laptop, press Ctrl+V in a remote Claude Code session. One setup script, a few KB, zero runtime deps." />
+<meta property="og:title" content="cssh — paste local screenshots into your remote coding agent over SSH" />
+<meta property="og:description" content="Works with Claude Code, Codex, and any terminal app that reads xclip. Screenshot, then Ctrl+V in your SSH session. One setup script, a few KB, zero runtime deps." />
 <meta property="og:url" content="https://cssh.ssitaraman.com" />
 <meta name="twitter:card" content="summary_large_image" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%2317151f'/%3E%3Cpath%20d='M8%2011l4.5%204.5L8%2020'%20fill='none'%20stroke='%23a6e3a1'%20stroke-width='2.4'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3Crect%20x='16'%20y='18.5'%20width='9'%20height='3'%20rx='1.2'%20fill='%23ff87d7'/%3E%3C/svg%3E" />
@@ -109,6 +109,9 @@
   .microcopy{margin-top:15px;font-family:var(--mono);font-size:.78rem;color:var(--faint);
     letter-spacing:-.01em}
   .microcopy b{color:var(--mauve);font-weight:500}
+  .works{margin-top:22px;padding-top:20px;border-top:1px solid var(--line);
+    font-family:var(--mono);font-size:.78rem;color:var(--faint);letter-spacing:-.01em}
+  .works b{color:var(--text);font-weight:500}
 
   /* ---------- terminal (signature) ---------- */
   .term{background:var(--crust);border:1px solid var(--line-strong);border-radius:14px;
@@ -254,15 +257,16 @@
 <header class="hero" id="top">
   <div class="wrap hero-grid">
     <div>
-      <span class="eyebrow">Clipboard → SSH, for Claude Code</span>
-      <h1>Paste local screenshots into <span class="accent">remote Claude&nbsp;Code</span>.</h1>
-      <p class="lede">Claude Code reads the <b>remote box's</b> clipboard, so a normal paste never sees the screenshot on your laptop. cssh bridges the two — screenshot, then press <kbd>Ctrl</kbd>+<kbd>V</kbd> in your SSH session.</p>
+      <span class="eyebrow">Clipboard → SSH, for terminal AI agents</span>
+      <h1>Paste local screenshots into your <span class="accent">remote coding&nbsp;agent</span>.</h1>
+      <p class="lede">Your agent runs over SSH and only ever sees the <b>remote box's</b> clipboard — so the screenshot on your laptop never shows up. cssh bridges the two: screenshot, then press <kbd>Ctrl</kbd>+<kbd>V</kbd> in your session.</p>
 
       <div class="cmd" role="group" aria-label="Install command">
         <div class="cmd-text" id="cmd"><span class="p">$ </span>curl -fsSL https://raw.githubusercontent.com/Hackerbone/cssh/main/install.sh | bash</div>
         <button class="cmd-copy" id="copy" aria-label="Copy install command">copy</button>
       </div>
       <p class="microcopy">One setup script · <b>a few KB</b> · no runtime deps beyond <b>bash</b> + <b>ssh</b></p>
+      <p class="works">Works with <b>Claude Code</b> · <b>Codex</b> · any terminal app that pastes via <b>xclip</b></p>
     </div>
 
     <div class="term" aria-hidden="true">
@@ -294,11 +298,11 @@
         <div class="cap">Remote box</div>
         <div class="box">
           <div class="big">xclip shim</div>
-          <div class="sub">serves the image to Claude Code</div>
+          <div class="sub">serves the image to your agent</div>
         </div>
       </div>
     </div>
-    <p class="bridge-note"><b>The gap:</b> your image lives in your laptop's clipboard; Claude Code, running over SSH, only ever asks the remote's. cssh ships the bytes across a connection that's already warm — no X server, no OSC 52, no copy-paste dance.</p>
+    <p class="bridge-note"><b>The gap:</b> your image lives in your laptop's clipboard; your agent, running over SSH, only ever asks the remote's. cssh ships the bytes across a connection that's already warm — no X server, no OSC 52, no copy-paste dance.</p>
   </div>
 </section>
 
@@ -322,7 +326,7 @@
       </div>
       <div class="step">
         <div class="no">03 — Paste</div>
-        <h3>Press Ctrl+V in Claude Code</h3>
+        <h3>Press Ctrl+V in your agent</h3>
         <p>A shimmed <code>xclip</code>, ahead of the real one on <code>PATH</code>, serves your image once — then gets out of the way.</p>
       </div>
     </div>
@@ -394,13 +398,13 @@
         <p class="note">Reads your OS clipboard natively — <b>osascript</b> on macOS, <b>wl-paste</b> / <b>xclip</b> on Linux, <b>PowerShell</b> on Windows.</p>
       </div>
       <div class="plat">
-        <div class="cap">Remote — where Claude Code runs</div>
+        <div class="cap">Remote — where your agent runs</div>
         <ul>
           <li>Any Linux box you SSH into</li>
           <li>WSL</li>
           <li>Cloud dev boxes</li>
         </ul>
-        <p class="note">The shim hooks the exact <b>xclip</b> calls Claude Code makes on Linux. Bash, <b>stat</b>, and <b>date</b> are all it needs.</p>
+        <p class="note">The shim hooks the exact <b>xclip</b> calls your agent makes on Linux. Bash, <b>stat</b>, and <b>date</b> are all it needs.</p>
       </div>
     </div>
   </div>
@@ -415,7 +419,7 @@
         <div class="cmd-text" id="cmd2"><span class="p">$ </span>curl -fsSL https://raw.githubusercontent.com/Hackerbone/cssh/main/install.sh | bash</div>
         <button class="cmd-copy" id="copy2" aria-label="Copy install command">copy</button>
       </div>
-      <p class="then">then <b>screenshot → Ctrl+V</b> inside Claude Code on the remote</p>
+      <p class="then">then <b>screenshot → Ctrl+V</b> inside your agent on the remote</p>
     </div>
   </div>
 </section>
@@ -452,23 +456,23 @@
   const LINES = [
     ['<span class="mut">$ </span>curl -fsSL .../install.sh | bash', 0],
     ['', 90],
-    ['  <span class="co">cssh</span>  <span class="mut">clipboard images into Claude Code over SSH</span>', 120],
+    ['  <span class="co">cssh</span>  <span class="mut">clipboard images into your agent over SSH</span>', 120],
     ['', 60],
     ['<span class="st">› Choose which SSH host(s) to enable</span>', 150],
     ['  <span class="mut">Hosts from ~/.ssh/config — press x/space, then enter</span>', 90],
-    ['  <span class="sel">&gt; ✓ buggy</span>', 130],
-    ['    <span class="dim">• demo-cloud</span>', 60],
-    ['    <span class="dim">• langfuse</span>', 60],
+    ['  <span class="sel">&gt; ✓ dev-box</span>', 130],
+    ['    <span class="dim">• gpu-01</span>', 60],
+    ['    <span class="dim">• staging</span>', 60],
     ['    <span class="dim">➕ Add a custom host</span>', 90],
     ['', 60],
-    ['  <span class="ok">✓</span> enabled SSH multiplexing for buggy', 150],
+    ['  <span class="ok">✓</span> enabled SSH multiplexing for dev-box', 150],
     ['<span class="st">› Installing remote shim over SSH</span>', 150],
-    ['  <span class="ok">✓</span> shim installed on buggy', 150],
+    ['  <span class="ok">✓</span> shim installed on dev-box', 150],
     ['<span class="st">› How do you want to trigger pushes?</span>', 150],
     ['  <span class="ok">✓</span> daemon auto-starts at login', 160],
     ['', 70],
     ['  <span class="ok">✓ All set.</span>', 180],
-    ['  <span class="mut">screenshot → </span><span class="sel">Ctrl+V</span><span class="mut"> in Claude Code on buggy</span>', 0],
+    ['  <span class="mut">screenshot → </span><span class="sel">Ctrl+V</span><span class="mut"> in your agent on dev-box</span>', 0],
   ];
   const body = document.getElementById("tbody");
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
