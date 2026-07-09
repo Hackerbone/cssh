@@ -464,9 +464,106 @@ setup_daemon_autostart() {
 }
 
 # ----------------------------------------------------------------------------
+# uninstall — reverse everything the installer did, on both ends
+# ----------------------------------------------------------------------------
+uninstall_remote() {
+    local host="$1"
+    info "cleaning $host ..."
+    if ssh -o BatchMode=yes -o ConnectTimeout=8 "$host" 'bash -s' <<'REMOTE_UNINSTALL'
+set -e
+# Drop the cssh PATH line (and its comment) from whichever rc files have it.
+for rc in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.profile"; do
+    [ -f "$rc" ] || continue
+    grep -q '^# cssh: shim xclip' "$rc" 2>/dev/null || continue
+    tmp="$(mktemp)"
+    awk 'c{c=0;next} /^# cssh: shim xclip/{c=1;next} {print}' "$rc" > "$tmp" && mv "$tmp" "$rc"
+done
+rm -rf "$HOME/.cssh"
+REMOTE_UNINSTALL
+    then ok "removed shim from $host"
+    else warn "could not reach $host — delete ~/.cssh and the cssh PATH line there by hand"
+    fi
+}
+
+strip_ssh_config() {
+    [ -f "$ssh_config" ] || return 0
+    grep -q '^# cssh' "$ssh_config" 2>/dev/null || { info "no cssh blocks in ~/.ssh/config"; return 0; }
+    cp "$ssh_config" "$ssh_config.cssh.bak"
+    local tmp; tmp="$(mktemp)"
+    # A cssh block is a "# cssh" comment, its Host line, and the indented body
+    # under it, ending at the next blank line.
+    awk '
+        /^# cssh/                  { skip=1; next }
+        skip && /^Host[[:space:]]/ { next }
+        skip && /^[[:space:]]*$/   { skip=0; next }
+        skip && /^[[:space:]]/     { next }
+        { skip=0; print }
+    ' "$ssh_config" > "$tmp" && mv "$tmp" "$ssh_config"
+    ok "removed cssh blocks from ~/.ssh/config  (backup: ~/.ssh/config.cssh.bak)"
+}
+
+uninstall() {
+    local assume_yes=0
+    case "${1:-}" in -y|--yes|yes) assume_yes=1 ;; esac
+
+    banner
+    step "Uninstall cssh"
+
+    # Which remotes did we touch? Prefer the recorded list; fall back to the
+    # hosts tagged with cssh blocks in ~/.ssh/config.
+    local uhosts=() line
+    if [ -f "$HOME/.cssh/hosts" ]; then
+        while IFS= read -r line; do [ -n "$line" ] && uhosts+=("$line"); done < "$HOME/.cssh/hosts"
+    elif [ -f "$ssh_config" ]; then
+        while IFS= read -r line; do [ -n "$line" ] && uhosts+=("$line"); done \
+            < <(awk '/^# cssh/{f=1;next} f&&tolower($1)=="host"{for(i=2;i<=NF;i++)print $i; f=0}' "$ssh_config" | sort -u)
+    fi
+
+    if [ "${#uhosts[@]}" -gt 0 ]; then
+        info "remote shim will be removed from: ${bold}${uhosts[*]}${reset}"
+    fi
+    info "local: ~/.cssh, the login daemon, and cssh blocks in ~/.ssh/config"
+    if [ "$assume_yes" != "1" ]; then
+        ui_confirm "Remove all of it?" || die "cancelled — nothing changed"
+    fi
+
+    # 1) remote shims (best effort — a host may be offline).
+    if [ "${#uhosts[@]}" -gt 0 ]; then
+        step "Removing remote shim over SSH"
+        local h
+        for h in "${uhosts[@]}"; do uninstall_remote "$h"; done
+    fi
+
+    # 2) stop the daemon everywhere it might be running.
+    step "Removing local components"
+    pkill -f "\.cssh/bin/cssh-daemon" >/dev/null 2>&1 || true
+    local plist="$HOME/Library/LaunchAgents/com.cssh.daemon.plist"
+    if [ -f "$plist" ]; then
+        launchctl unload "$plist" >/dev/null 2>&1 || true
+        rm -f "$plist"
+        ok "removed launchd agent"
+    fi
+
+    # 3) local files.
+    rm -rf "$HOME/.cssh"
+    ok "removed ~/.cssh"
+
+    # 4) ssh config blocks.
+    strip_ssh_config
+
+    printf '\n%s%s cssh uninstalled.%s\n' "$green" "$bold" "$reset"
+    info "If you bound a hotkey to cssh-push, remove that binding in your launcher."
+}
+
+# ----------------------------------------------------------------------------
 # main
 # ----------------------------------------------------------------------------
 main() {
+    # Subcommand: uninstall (works with `... | bash -s -- --uninstall`).
+    case "${1:-}" in
+        uninstall|--uninstall|-u|remove|--remove) shift 2>/dev/null || true; uninstall "$@"; return ;;
+    esac
+
     banner
     case "$(uname -s)" in
         Darwin|Linux) : ;;
@@ -522,6 +619,8 @@ main() {
         primary="$(ui_choose_one "Default host for cssh-push / daemon" "${reachable[@]}")"
     fi
     write_config "$primary"
+    # Record the hosts we touched so uninstall can clean them precisely.
+    printf '%s\n' "${enabled[@]}" > "$HOME/.cssh/hosts"
 
     step "How do you want to trigger pushes?"
     local mode
@@ -546,6 +645,8 @@ main() {
     info "Hotkey: bind a key to  ${bold}$HOME/.cssh/bin/cssh-push${reset}  (Raycast / Hammerspoon / Shortcuts)"
     info "Then: screenshot → Ctrl+V inside Claude Code on ${bold}$primary${reset}"
     warn "Relaunch Claude Code on the remote so it inherits the shimmed PATH."
+    printf '  %s•%s uninstall anytime: %scurl -fsSL %s | bash -s -- --uninstall%s\n' \
+        "$blue" "$reset" "$dim" "https://raw.githubusercontent.com/Hackerbone/cssh/main/install.sh" "$reset"
 }
 
 main "$@"

@@ -82,18 +82,16 @@ Two ways to trigger the push, chosen at install — use either or both:
 
 ## Uninstall
 
-```bash
-# laptop
-rm -rf ~/.cssh
-launchctl unload ~/Library/LaunchAgents/com.cssh.daemon.plist 2>/dev/null
-rm -f ~/Library/LaunchAgents/com.cssh.daemon.plist
+One line — the mirror of install. It removes the remote shim (and its `PATH`
+line), the local `~/.cssh`, the login daemon, and every `# cssh` block from
+`~/.ssh/config` (backing the file up to `~/.ssh/config.cssh.bak` first):
 
-# remote (per host)
-ssh <host> 'rm -f ~/.cssh/bin/xclip'
+```bash
+curl -fsSL https://raw.githubusercontent.com/Hackerbone/cssh/main/install.sh | bash -s -- --uninstall
 ```
 
-Then remove the `# cssh` blocks from `~/.ssh/config` on the laptop and the
-`# cssh` `PATH` line from your remote shell rc.
+Add `--yes` to skip the confirmation. Any offline host is reported so you can
+clean it later; everything on your laptop is removed regardless.
 
 ## License
 
